@@ -80,8 +80,12 @@ def scale_down(current_instance_count):
                      {'Name': 'instance-state-name', 'Values': ['running']}]
         )
         for instance in instances.limit(instances_to_remove):
+            print(f"Terminating instance {instance.id} ({instance.tags[0]['Value']})")
             instance.terminate()
         print(f"Scaling down: {instances_to_remove} instances removed.")
+    else:
+        print("No instances to terminate.")
+
 
 # Autoscaling controller to monitor queue and adjust App Tier instances
 def autoscaling_controller():
@@ -156,4 +160,4 @@ if __name__ == "__main__":
     autoscaling_thread.start()
 
     # Run the Flask server on port 8000
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8000,debug=True)
