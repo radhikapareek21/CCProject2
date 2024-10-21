@@ -29,10 +29,7 @@ s3 = boto3.client('s3', region_name=REGION)
 APP_TIER_AMI_ID = 'ami-05b9307aa795111f9'  # Replace with your AMI ID
 APP_TIER_INSTANCE_TYPE = 't2.micro'
 MAX_INSTANCES = 20
-
-# Scaling thresholds
-SCALE_UP_THRESHOLD = 1  # Scale up if there is at least 1 message in the queue
-SCALE_DOWN_THRESHOLD = 0  # Scale down if there are no messages
+MESSAGES_PER_INSTANCE = 5  # Each instance can handle 5 messages
 
 # Function to get the number of messages in the SQS request queue
 def get_queue_size():
@@ -43,9 +40,9 @@ def get_queue_size():
     return int(response['Attributes'].get('ApproximateNumberOfMessages', 0))
 
 # Function to scale up the App Tier (launch EC2 instances)
-def scale_up(current_instance_count):
+def scale_up(current_instance_count, required_instances):
     if current_instance_count < MAX_INSTANCES:
-        instances_to_add = min(MAX_INSTANCES - current_instance_count, 1)
+        instances_to_add = min(MAX_INSTANCES - current_instance_count, required_instances - current_instance_count)
         
         # Launch new instances
         for i in range(instances_to_add):
@@ -90,12 +87,15 @@ def autoscaling_controller():
 
         print(f"Queue size: {queue_size}, Current App Tier instances: {current_instance_count}")
 
-        # SCALE UP if there are messages in the queue and we have not reached the maximum number of instances
-        if queue_size >= SCALE_UP_THRESHOLD:
-            scale_up(current_instance_count)
-        
-        # SCALE DOWN if there are no messages in the queue and there are running instances
-        elif queue_size == SCALE_DOWN_THRESHOLD:
+        # Determine the required number of instances based on message load
+        required_instances = (queue_size // MESSAGES_PER_INSTANCE) + (1 if queue_size % MESSAGES_PER_INSTANCE > 0 else 0)
+
+        # SCALE UP if the current instances are not enough to handle the messages
+        if required_instances > current_instance_count:
+            scale_up(current_instance_count, required_instances)
+
+        # SCALE DOWN if there are no messages in the queue and we have running instances
+        elif queue_size == 0:
             scale_down(current_instance_count)
 
         # Autoscaling check every 10 seconds
