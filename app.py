@@ -26,7 +26,7 @@ ec2 = boto3.resource('ec2', region_name=REGION)
 s3 = boto3.client('s3', region_name=REGION)
 
 # App Tier AMI and Instance configuration
-APP_TIER_AMI_ID = 'ami-05297a07b94165351'  # Replace with your AMI ID
+APP_TIER_AMI_ID = 'ami-05b9307aa795111f9'  # Replace with your AMI ID
 APP_TIER_INSTANCE_TYPE = 't2.micro'
 MAX_INSTANCES = 20
 MIN_INSTANCES = 0
@@ -161,3 +161,4 @@ if __name__ == "__main__":
 
     # Run the Flask server on port 8000
     app.run(host="0.0.0.0", port=8000,debug=True)
+
