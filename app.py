@@ -41,13 +41,11 @@ def get_queue_size():
         QueueUrl=REQUEST_QUEUE_URL,
         AttributeNames=['ApproximateNumberOfMessages']
     )
-    return int(response['Attributes']['ApproximateNumberOfMessages'])
+    return int(response['Attributes'].get('ApproximateNumberOfMessages', 0))
 
 # Function to scale up the App Tier (launch EC2 instances with sequential names)
-
 def scale_up(current_instance_count):
     if current_instance_count < MAX_INSTANCES:
-        # Launch up to 5 instances at a time, but don't exceed MAX_INSTANCES
         instances_to_add = min(MAX_INSTANCES - current_instance_count, 1)
 
         # Get existing instance numbers
@@ -75,7 +73,7 @@ def scale_up(current_instance_count):
 # Function to scale down the App Tier (terminate EC2 instances)
 def scale_down(current_instance_count):
     if current_instance_count > MIN_INSTANCES:
-        instances_to_remove = min(current_instance_count - MIN_INSTANCES, 1)  # Terminate up to 5 instances at a time
+        instances_to_remove = min(current_instance_count - MIN_INSTANCES, 1)
         instances = ec2.instances.filter(
             Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
                      {'Name': 'instance-state-name', 'Values': ['running']}]
@@ -86,7 +84,6 @@ def scale_down(current_instance_count):
         print(f"Scaling down: {instances_to_remove} instances removed.")
     else:
         print("No instances to terminate.")
-
 
 # Autoscaling controller to monitor queue and adjust App Tier instances
 def autoscaling_controller():
@@ -102,12 +99,11 @@ def autoscaling_controller():
 
         if queue_size > SCALE_UP_THRESHOLD:
             scale_up(current_instance_count)
-        elif queue_size < SCALE_DOWN_THRESHOLD:
+        elif queue_size < SCALE_DOWN_THRESHOLD and current_instance_count > 0:
             scale_down(current_instance_count)
 
         # Autoscaling check every 10 seconds
         time.sleep(10)
-        
 
 @app.route("/", methods=["POST"])
 def handle_image():
@@ -117,8 +113,6 @@ def handle_image():
     file = request.files['inputFile']
     filename = file.filename
     image_data = file.read()
-    print("Sending to request queue")
-    print(filename)
     
     # Store the image in the S3 input bucket
     s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
@@ -133,42 +127,36 @@ def handle_image():
             QueueUrl=REQUEST_QUEUE_URL,
             MessageBody=json.dumps(message)
         )
-        # Log successful message send
         print(f"Message sent to request queue. MessageId: {response['MessageId']}")
-        time.sleep(5)
     except Exception as e:
-        # Log error if sending message fails
         print(f"Failed to send message to request queue: {str(e)}")
         return "Error submitting image for processing", 500
 
     # Poll the response queue for the result
-    
     while True:
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
             MaxNumberOfMessages=1,
-            WaitTimeSeconds=20  # Poll for 20 seconds
+            WaitTimeSeconds=20
         )
         if 'Messages' in response:
-            print("Got message from response queue")
             for msg in response['Messages']:
                 body = json.loads(msg['Body'])
-                print(f"Expected filename: {filename}, Received filename: {body['filename']}")
-                print(body)
                 if body['filename'] == filename:
+                    # Process the result from the App Tier
+                    print(f"Received result for {filename}: {body['result']}")
+                    
                     # Store the result in the S3 output bucket
-                    # s3.put_object(Bucket=OUTPUT_BUCKET, Key=filename, Body=body['result'])
-                    print(body['result'])
+                    s3.put_object(Bucket=OUTPUT_BUCKET, Key=filename, Body=body['result'])
+                    
                     # Delete the message from the queue
                     sqs.delete_message(
                         QueueUrl=RESPONSE_QUEUE_URL,
                         ReceiptHandle=msg['ReceiptHandle']
                     )
                     return f"{filename}:{body['result']}", 200
-                else:
-                    # Wait for 2 seconds before polling again to give time for the message to be deleted
-                    time.sleep(2)
-                    continue
+        else:
+            time.sleep(2)
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
@@ -177,4 +165,4 @@ if __name__ == "__main__":
     autoscaling_thread.start()
 
     # Run the Flask server on port 8000
-    app.run(host="0.0.0.0", port=8000,debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)
