@@ -158,9 +158,9 @@ def handle_image():
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
-    autoscaling_thread = threading.Thread(target=autoscaling_controller)
-    autoscaling_thread.daemon = True
-    autoscaling_thread.start()
+    # autoscaling_thread = threading.Thread(target=autoscaling_controller)
+    # autoscaling_thread.daemon = True
+    # autoscaling_thread.start()
 
     # Run the Flask server on port 8000
     app.run(host="0.0.0.0", port=8000,debug=True)
