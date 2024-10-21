@@ -26,7 +26,7 @@ ec2 = boto3.resource('ec2', region_name=REGION)
 s3 = boto3.client('s3', region_name=REGION)
 
 # App Tier AMI and Instance configuration
-APP_TIER_AMI_ID = 'ami-084fd8fa149f20ec0'  # Replace with your AMI ID
+APP_TIER_AMI_ID = 'ami-05297a07b94165351'  # Replace with your AMI ID
 APP_TIER_INSTANCE_TYPE = 't2.micro'
 MAX_INSTANCES = 20
 MIN_INSTANCES = 0
