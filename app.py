@@ -135,13 +135,14 @@ def handle_image():
         )
         # Log successful message send
         print(f"Message sent to request queue. MessageId: {response['MessageId']}")
+        time.sleep(5)
     except Exception as e:
         # Log error if sending message fails
         print(f"Failed to send message to request queue: {str(e)}")
         return "Error submitting image for processing", 500
-    return "Request sending tested",400
+
     # Poll the response queue for the result
-    '''
+    
     while True:
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
@@ -168,7 +169,6 @@ def handle_image():
                     # Wait for 2 seconds before polling again to give time for the message to be deleted
                     time.sleep(2)
                     continue
-                    '''
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
