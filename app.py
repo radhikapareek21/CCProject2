@@ -28,7 +28,7 @@ s3 = boto3.client('s3', region_name=REGION)
 # App Tier AMI and Instance configuration
 APP_TIER_AMI_ID = 'ami-05297a07b94165351'  # Replace with your AMI ID
 APP_TIER_INSTANCE_TYPE = 't2.micro'
-MAX_INSTANCES = 20  # Limit the max instances to 20
+MAX_INSTANCES = 20
 MIN_INSTANCES = 0
 
 # Thresholds for scaling
@@ -41,13 +41,13 @@ def get_queue_size():
         QueueUrl=REQUEST_QUEUE_URL,
         AttributeNames=['ApproximateNumberOfMessages']
     )
-    return int(response['Attributes'].get('ApproximateNumberOfMessages', 0))
+    return int(response['Attributes']['ApproximateNumberOfMessages'])
 
 # Function to scale up the App Tier (launch EC2 instances with sequential names)
 def scale_up(current_instance_count):
     if current_instance_count < MAX_INSTANCES:
         # Launch up to 5 instances at a time, but don't exceed MAX_INSTANCES
-        instances_to_add = min(MAX_INSTANCES - current_instance_count, 5)
+        instances_to_add = min(MAX_INSTANCES - current_instance_count, 1)
 
         # Get existing instance numbers
         instances = ec2.instances.filter(
@@ -74,7 +74,7 @@ def scale_up(current_instance_count):
 # Function to scale down the App Tier (terminate EC2 instances)
 def scale_down(current_instance_count):
     if current_instance_count > MIN_INSTANCES:
-        instances_to_remove = min(current_instance_count - MIN_INSTANCES, 5)  # Terminate up to 5 instances at a time
+        instances_to_remove = min(current_instance_count - MIN_INSTANCES, 1)  # Terminate up to 5 instances at a time
         instances = ec2.instances.filter(
             Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
                      {'Name': 'instance-state-name', 'Values': ['running']}]
@@ -85,6 +85,7 @@ def scale_down(current_instance_count):
         print(f"Scaling down: {instances_to_remove} instances removed.")
     else:
         print("No instances to terminate.")
+
 
 # Autoscaling controller to monitor queue and adjust App Tier instances
 def autoscaling_controller():
@@ -115,6 +116,9 @@ def handle_image():
     filename = file.filename
     image_data = file.read()
 
+    # Store the image in the S3 input bucket
+    s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
+
     # Send the image filename and data to the App Tier via SQS
     message = {
         "filename": filename,
@@ -124,10 +128,6 @@ def handle_image():
         QueueUrl=REQUEST_QUEUE_URL,
         MessageBody=json.dumps(message)
     )
-
-    # Store the image in the S3 input bucket
-    s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
-
 
     # Poll the response queue for the result
     while True:
@@ -160,4 +160,4 @@ if __name__ == "__main__":
     autoscaling_thread.start()
 
     # Run the Flask server on port 8000
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=8000,debug=True)
