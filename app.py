@@ -140,11 +140,13 @@ def handle_image():
         )
         if 'Messages' in response:
             print("Got message from response queue")
+            print(f"Expected filename: {filename}, Received filename: {body['filename']}")
             for msg in response['Messages']:
                 body = json.loads(msg['Body'])
+                print(body)
                 if body['filename'] == filename:
                     # Store the result in the S3 output bucket
-                    s3.put_object(Bucket=OUTPUT_BUCKET, Key=filename, Body=body['result'])
+                    # s3.put_object(Bucket=OUTPUT_BUCKET, Key=filename, Body=body['result'])
                     print(body['result'])
                     # Delete the message from the queue
                     sqs.delete_message(
