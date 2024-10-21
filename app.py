@@ -44,7 +44,7 @@ def get_queue_size():
     return int(response['Attributes']['ApproximateNumberOfMessages'])
 
 # Function to scale up the App Tier (launch EC2 instances with sequential names)
-'''
+
 def scale_up(current_instance_count):
     if current_instance_count < MAX_INSTANCES:
         # Launch up to 5 instances at a time, but don't exceed MAX_INSTANCES
@@ -107,7 +107,7 @@ def autoscaling_controller():
 
         # Autoscaling check every 10 seconds
         time.sleep(10)
-        '''
+        
 
 @app.route("/", methods=["POST"])
 def handle_image():
@@ -172,9 +172,9 @@ def handle_image():
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
-    # autoscaling_thread = threading.Thread(target=autoscaling_controller)
-    # autoscaling_thread.daemon = True
-    # autoscaling_thread.start()
+    autoscaling_thread = threading.Thread(target=autoscaling_controller)
+    autoscaling_thread.daemon = True
+    autoscaling_thread.start()
 
     # Run the Flask server on port 8000
     app.run(host="0.0.0.0", port=8000,debug=True)
