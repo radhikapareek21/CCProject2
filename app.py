@@ -162,9 +162,10 @@ def handle_image():
                         ReceiptHandle=msg['ReceiptHandle']
                     )
                     return f"{filename}:{body['result']}", 200
-        else:
-            # Continue polling until we get a response
-            continue
+                else:
+                    # Wait for 2 seconds before polling again to give time for the message to be deleted
+                    time.sleep(2)
+                    continue
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
