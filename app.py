@@ -135,7 +135,6 @@ def handle_image():
         )
         # Log successful message send
         print(f"Message sent to request queue. MessageId: {response['MessageId']}")
-        time.sleep(5)
     except Exception as e:
         # Log error if sending message fails
         print(f"Failed to send message to request queue: {str(e)}")
@@ -146,7 +145,7 @@ def handle_image():
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
             MaxNumberOfMessages=1,
-            WaitTimeSeconds=5  # Poll for 5 seconds
+            WaitTimeSeconds=20  # Poll for 20 seconds
         )
         if 'Messages' in response:
             print("Got message from response queue")
