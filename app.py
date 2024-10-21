@@ -22,7 +22,7 @@ OUTPUT_BUCKET = f'{ASU_ID}-out-bucket'
 
 # EC2 details
 AMI_ID = 'ami-05b9307aa795111f9'  # Replace with your AMI ID
-INSTANCE_TYPE = 't2.micro'
+INSTANCE_TYPE = 't2.micro'  # Smaller instances to reduce vCPU usage
 MAX_INSTANCES = 20  # Maximum number of App Tier instances
 # Add your user data script here to start app_tier.py on the instance
 
@@ -30,6 +30,7 @@ MAX_INSTANCES = 20  # Maximum number of App Tier instances
 # Initialize AWS clients
 sqs = boto3.client('sqs', region_name=REGION)
 ec2 = boto3.client('ec2', region_name=REGION)
+service_quotas = boto3.client('service-quotas', region_name=REGION)
 s3 = boto3.client('s3', region_name=REGION)
 
 running_app_instances = []  # Track running App Tier instances
@@ -37,19 +38,29 @@ running_app_instances = []  # Track running App Tier instances
 # Function to launch new EC2 instances (App Tier)
 def launch_app_instance():
     try:
-        instance = ec2.run_instances(
-            ImageId=AMI_ID,
-            InstanceType=INSTANCE_TYPE,
-            MinCount=1,
-            MaxCount=1,
-            TagSpecifications=[{
-                'ResourceType': 'instance',
-                'Tags': [{'Key': 'Name', 'Value': 'app-tier-instance'}]
-            }]
-        )
-        instance_id = instance['Instances'][0]['InstanceId']
-        print(f"Launched EC2 app instance {instance_id}")
-        return instance_id
+        available_vcpus = get_available_vcpu_limit()  # Recheck vCPUs before each launch
+        used_vcpus = count_used_vcpus()
+
+        # Check if we have enough available vCPUs before launching the instance
+        if used_vcpus < available_vcpus:
+            instance = ec2.run_instances(
+                ImageId=AMI_ID,
+                InstanceType=INSTANCE_TYPE,
+                MinCount=1,
+                MaxCount=1,
+                KeyName=KEY_NAME,
+                UserData=USER_DATA_SCRIPT,
+                TagSpecifications=[{
+                    'ResourceType': 'instance',
+                    'Tags': [{'Key': 'Name', 'Value': 'app-tier-instance'}]
+                }]
+            )
+            instance_id = instance['Instances'][0]['InstanceId']
+            print(f"Launched EC2 app instance {instance_id}")
+            return instance_id
+        else:
+            print(f"Insufficient vCPUs available. Used: {used_vcpus}, Available: {available_vcpus}")
+            return None
     except Exception as e:
         print(f"Error occurred while launching EC2 instance: {str(e)}")
         return None
@@ -59,6 +70,7 @@ def terminate_app_instances(instance_ids):
     try:
         ec2.terminate_instances(InstanceIds=instance_ids)
         print(f"Terminated EC2 app instances: {instance_ids}")
+        time.sleep(10)  # Add a delay to allow AWS to register the termination
     except Exception as e:
         print(f"Error occurred while terminating EC2 instances: {str(e)}")
 
@@ -88,6 +100,43 @@ def count_running_instances():
             running_instances += 1
     return running_instances
 
+# Function to check available vCPU limit
+def get_available_vcpu_limit():
+    try:
+        response = service_quotas.get_service_quota(
+            ServiceCode='ec2',
+            QuotaCode='L-1216C47A'  # Quota for Running On-Demand Standard Instances
+        )
+        vcpu_limit = response['Quota']['Value']
+        return vcpu_limit
+    except Exception as e:
+        print(f"Error fetching vCPU limit: {str(e)}")
+        return 0
+
+# Function to count the currently used vCPUs
+def count_used_vcpus():
+    try:
+        response = ec2.describe_instances(
+            Filters=[{
+                'Name': 'instance-state-name',
+                'Values': ['pending', 'running']
+            }]
+        )
+        vcpus_used = 0
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                instance_type = instance['InstanceType']
+                # Get vCPU count based on the instance type
+                if instance_type == 't2.micro':
+                    vcpus_used += 1
+                elif instance_type == 't2.nano':
+                    vcpus_used += 1
+                # Add similar checks for other instance types
+        return vcpus_used
+    except Exception as e:
+        print(f"Error counting used vCPUs: {str(e)}")
+        return 0
+
 # Autoscaling logic to scale up or down the App Tier
 def autoscaling_controller():
     global counter
@@ -96,9 +145,19 @@ def autoscaling_controller():
         request_queue_size = get_request_queue_size()
         total_running_app_instances = count_running_instances() - 1  # Subtract 1 for Web Tier instance
 
-        # Scale up if there are more messages than running instances
+        # Get vCPU limits and usage
+        available_vcpu_limit = get_available_vcpu_limit()
+        used_vcpus = count_used_vcpus()
+
+        remaining_vcpus = available_vcpu_limit - used_vcpus
+        if remaining_vcpus <= 0:
+            print("No available vCPUs to launch new instances.")
+            time.sleep(3)
+            continue
+
+        # Scale up if there are more messages than running instances and vCPUs are available
         if request_queue_size > total_running_app_instances and total_running_app_instances < MAX_INSTANCES:
-            additional_app_instances_needed = min(MAX_INSTANCES - total_running_app_instances, request_queue_size - total_running_app_instances)
+            additional_app_instances_needed = min(remaining_vcpus, request_queue_size - total_running_app_instances)
             for i in range(additional_app_instances_needed):
                 instance_id = launch_app_instance()
                 if instance_id and instance_id not in running_app_instances:
@@ -172,7 +231,7 @@ def handle_image():
         else:
             time.sleep(2)
 
-if __name__ == "__main__":
+if __name__ == "___MAIN__":
     # Run the autoscaling controller in a separate thread
     autoscaling_thread = threading.Thread(target=autoscaling_controller)
     autoscaling_thread.daemon = True
