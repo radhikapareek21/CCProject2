@@ -148,6 +148,14 @@ def handle_image():
                         QueueUrl=RESPONSE_QUEUE_URL,
                         ReceiptHandle=msg['ReceiptHandle']
                     )
+
+                    # Once the result is received, scale down the App Tier instances
+                    current_instances = list(ec2.instances.filter(
+                        Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
+                                 {'Name': 'instance-state-name', 'Values': ['running']}]
+                    ))
+                    scale_down(len(current_instances))
+
                     return f"{filename}: {result}", 200
         else:
             time.sleep(2)
