@@ -44,6 +44,7 @@ def get_queue_size():
     return int(response['Attributes']['ApproximateNumberOfMessages'])
 
 # Function to scale up the App Tier (launch EC2 instances with sequential names)
+'''
 def scale_up(current_instance_count):
     if current_instance_count < MAX_INSTANCES:
         # Launch up to 5 instances at a time, but don't exceed MAX_INSTANCES
@@ -106,6 +107,7 @@ def autoscaling_controller():
 
         # Autoscaling check every 10 seconds
         time.sleep(10)
+        '''
 
 @app.route("/", methods=["POST"])
 def handle_image():
@@ -137,12 +139,13 @@ def handle_image():
             WaitTimeSeconds=5  # Poll for 5 seconds
         )
         if 'Messages' in response:
+            print("Got message from response queue")
             for msg in response['Messages']:
                 body = json.loads(msg['Body'])
                 if body['filename'] == filename:
                     # Store the result in the S3 output bucket
                     s3.put_object(Bucket=OUTPUT_BUCKET, Key=filename, Body=body['result'])
-
+                    print(body['result'])
                     # Delete the message from the queue
                     sqs.delete_message(
                         QueueUrl=RESPONSE_QUEUE_URL,
