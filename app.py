@@ -23,9 +23,11 @@ OUTPUT_BUCKET = f'{ASU_ID}-out-bucket'
 # EC2 details
 AMI_ID = 'ami-05b9307aa795111f9'  # Replace with your AMI ID
 INSTANCE_TYPE = 't2.micro'  # Smaller instances to reduce vCPU usage
+KEY_NAME = 'your-key-pair'  # Replace with your key pair
 MAX_INSTANCES = 20  # Maximum number of App Tier instances
+USER_DATA_SCRIPT = '''#!/bin/bash
 # Add your user data script here to start app_tier.py on the instance
-
+''' 
 
 # Initialize AWS clients
 sqs = boto3.client('sqs', region_name=REGION)
@@ -231,7 +233,7 @@ def handle_image():
         else:
             time.sleep(2)
 
-if __name__ == "___MAIN__":
+if __name__ == "___main__":
     # Run the autoscaling controller in a separate thread
     autoscaling_thread = threading.Thread(target=autoscaling_controller)
     autoscaling_thread.daemon = True
