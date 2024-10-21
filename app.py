@@ -56,11 +56,16 @@ def launch_app_instance():
 
 # Function to terminate EC2 instances (App Tier)
 def terminate_app_instances(instance_ids):
+    if not instance_ids:
+        print("No instances to terminate. Skipping termination.")
+        return
+
     try:
         ec2.terminate_instances(InstanceIds=instance_ids)
         print(f"Terminated EC2 app instances: {instance_ids}")
     except Exception as e:
         print(f"Error occurred while terminating EC2 instances: {str(e)}")
+
 
 # Function to get the size of the request queue
 def get_request_queue_size():
@@ -112,11 +117,16 @@ def autoscaling_controller():
 
         # Scale down after 5 consecutive empty queue checks
         if counter >= 5 and total_running_app_instances > 0:
-            terminate_app_instances(running_app_instances)
-            running_app_instances.clear()
+            if running_app_instances:
+                terminate_app_instances(running_app_instances)
+                running_app_instances.clear()
+            else:
+                print("No instances to terminate.")
+
             counter = 0
 
         time.sleep(3)
+
 
 # Flask route to handle image uploads
 @app.route("/", methods=["POST"])
