@@ -31,6 +31,84 @@ APP_TIER_INSTANCE_TYPE = 't2.micro'
 MAX_INSTANCES = 20
 MIN_INSTANCES = 0
 
+# Thresholds for scaling
+SCALE_UP_THRESHOLD = 5  # Scale up if more than 5 messages in the queue
+SCALE_DOWN_THRESHOLD = 1  # Scale down if fewer than 1 message in the queue
+
+# Function to get the number of messages in the SQS request queue
+def get_queue_size():
+    response = sqs.get_queue_attributes(
+        QueueUrl=REQUEST_QUEUE_URL,
+        AttributeNames=['ApproximateNumberOfMessages']
+    )
+    return int(response['Attributes']['ApproximateNumberOfMessages'])
+
+# Function to scale up the App Tier (launch EC2 instances with sequential names)
+'''
+def scale_up(current_instance_count):
+    if current_instance_count < MAX_INSTANCES:
+        # Launch up to 5 instances at a time, but don't exceed MAX_INSTANCES
+        instances_to_add = min(MAX_INSTANCES - current_instance_count, 1)
+
+        # Get existing instance numbers
+        instances = ec2.instances.filter(
+            Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
+                     {'Name': 'instance-state-name', 'Values': ['running']}]
+        )
+        instance_numbers = [int(instance.tags[0]['Value'].split('-')[-1]) for instance in instances if instance.tags]
+        next_instance_number = max(instance_numbers) + 1 if instance_numbers else 1
+
+        for i in range(instances_to_add):
+            instance_name = f"app-tier-instance-{next_instance_number + i}"
+            ec2.create_instances(
+                ImageId=APP_TIER_AMI_ID,
+                InstanceType=APP_TIER_INSTANCE_TYPE,
+                MinCount=1,
+                MaxCount=1,
+                TagSpecifications=[{
+                    'ResourceType': 'instance',
+                    'Tags': [{'Key': 'Name', 'Value': instance_name}]
+                }]
+            )
+        print(f"Scaling up: {instances_to_add} instances added, named app-tier-instance-{next_instance_number} to app-tier-instance-{next_instance_number + instances_to_add - 1}.")
+
+# Function to scale down the App Tier (terminate EC2 instances)
+def scale_down(current_instance_count):
+    if current_instance_count > MIN_INSTANCES:
+        instances_to_remove = min(current_instance_count - MIN_INSTANCES, 1)  # Terminate up to 5 instances at a time
+        instances = ec2.instances.filter(
+            Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
+                     {'Name': 'instance-state-name', 'Values': ['running']}]
+        )
+        for instance in instances.limit(instances_to_remove):
+            print(f"Terminating instance {instance.id} ({instance.tags[0]['Value']})")
+            instance.terminate()
+        print(f"Scaling down: {instances_to_remove} instances removed.")
+    else:
+        print("No instances to terminate.")
+
+
+# Autoscaling controller to monitor queue and adjust App Tier instances
+def autoscaling_controller():
+    while True:
+        queue_size = get_queue_size()
+        current_instances = list(ec2.instances.filter(
+            Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
+                     {'Name': 'instance-state-name', 'Values': ['running']}]
+        ))
+        current_instance_count = len(current_instances)
+
+        print(f"Queue size: {queue_size}, Current App Tier instances: {current_instance_count}")
+
+        if queue_size > SCALE_UP_THRESHOLD:
+            scale_up(current_instance_count)
+        elif queue_size < SCALE_DOWN_THRESHOLD:
+            scale_down(current_instance_count)
+
+        # Autoscaling check every 10 seconds
+        time.sleep(10)
+        '''
+
 @app.route("/", methods=["POST"])
 def handle_image():
     if 'inputFile' not in request.files:
@@ -63,9 +141,8 @@ def handle_image():
         print(f"Failed to send message to request queue: {str(e)}")
         return "Error submitting image for processing", 500
 
-    # Poll the response queue for the result with two checks
-    attempts = 0
-    while attempts < 2:
+    # Poll the response queue for the result
+    while True:
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
             MaxNumberOfMessages=1,
@@ -91,15 +168,12 @@ def handle_image():
                     # Wait for 2 seconds before polling again to give time for the message to be deleted
                     time.sleep(2)
                     continue
-        else:
-            # Increment the number of attempts
-            attempts += 1
-            print(f"No messages found, attempt {attempts} of 2")
-            time.sleep(2)  # Wait before trying again
-    
-    # If no message is received after two attempts
-    return "No result found after polling twice", 404
 
 if __name__ == "__main__":
+    # Run the autoscaling controller in a separate thread
+    # autoscaling_thread = threading.Thread(target=autoscaling_controller)
+    # autoscaling_thread.daemon = True
+    # autoscaling_thread.start()
+
     # Run the Flask server on port 8000
     app.run(host="0.0.0.0", port=8000,debug=True)
