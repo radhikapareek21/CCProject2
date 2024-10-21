@@ -127,10 +127,17 @@ def handle_image():
         "filename": filename,
         "image_data": image_data.decode('ISO-8859-1')  # Encoding for sending binary data
     }
-    sqs.send_message(
-        QueueUrl=REQUEST_QUEUE_URL,
-        MessageBody=json.dumps(message)
-    )
+    try:
+        response = sqs.send_message(
+            QueueUrl=REQUEST_QUEUE_URL,
+            MessageBody=json.dumps(message)
+        )
+        # Log successful message send
+        print(f"Message sent to request queue. MessageId: {response['MessageId']}")
+    except Exception as e:
+        # Log error if sending message fails
+        print(f"Failed to send message to request queue: {str(e)}")
+        return "Error submitting image for processing", 500
 
     # Poll the response queue for the result
     while True:
