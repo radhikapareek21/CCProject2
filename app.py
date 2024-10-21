@@ -117,7 +117,8 @@ def handle_image():
     file = request.files['inputFile']
     filename = file.filename
     image_data = file.read()
-
+    print("Sending to request queue")
+    print(filename)
     # Store the image in the S3 input bucket
     s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
 
