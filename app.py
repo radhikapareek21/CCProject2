@@ -140,9 +140,9 @@ def handle_image():
         )
         if 'Messages' in response:
             print("Got message from response queue")
-            print(f"Expected filename: {filename}, Received filename: {body['filename']}")
             for msg in response['Messages']:
                 body = json.loads(msg['Body'])
+                print(f"Expected filename: {filename}, Received filename: {body['filename']}")
                 print(body)
                 if body['filename'] == filename:
                     # Store the result in the S3 output bucket
