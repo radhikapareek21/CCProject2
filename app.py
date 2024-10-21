@@ -25,15 +25,14 @@ sqs = boto3.client('sqs', region_name=REGION)
 ec2 = boto3.resource('ec2', region_name=REGION)
 s3 = boto3.client('s3', region_name=REGION)
 
-# App Tier AMI and Instance configuration
+# EC2 instance details
 APP_TIER_AMI_ID = 'ami-05b9307aa795111f9'  # Replace with your AMI ID
 APP_TIER_INSTANCE_TYPE = 't2.micro'
 MAX_INSTANCES = 20
-MIN_INSTANCES = 0
 
-# Thresholds for scaling
-SCALE_UP_THRESHOLD = 5  # Scale up if more than 5 messages in the queue
-SCALE_DOWN_THRESHOLD = 1  # Scale down if fewer than 1 message in the queue
+# Scaling thresholds
+SCALE_UP_THRESHOLD = 1  # Scale up if there is at least 1 message in the queue
+SCALE_DOWN_THRESHOLD = 0  # Scale down if there are no messages
 
 # Function to get the number of messages in the SQS request queue
 def get_queue_size():
@@ -43,21 +42,14 @@ def get_queue_size():
     )
     return int(response['Attributes'].get('ApproximateNumberOfMessages', 0))
 
-# Function to scale up the App Tier (launch EC2 instances with sequential names)
+# Function to scale up the App Tier (launch EC2 instances)
 def scale_up(current_instance_count):
     if current_instance_count < MAX_INSTANCES:
         instances_to_add = min(MAX_INSTANCES - current_instance_count, 1)
-
-        # Get existing instance numbers
-        instances = ec2.instances.filter(
-            Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
-                     {'Name': 'instance-state-name', 'Values': ['running']}]
-        )
-        instance_numbers = [int(instance.tags[0]['Value'].split('-')[-1]) for instance in instances if instance.tags]
-        next_instance_number = max(instance_numbers) + 1 if instance_numbers else 1
-
+        
+        # Launch new instances
         for i in range(instances_to_add):
-            instance_name = f"app-tier-instance-{next_instance_number + i}"
+            instance_name = f"app-tier-instance-{current_instance_count + i + 1}"
             ec2.create_instances(
                 ImageId=APP_TIER_AMI_ID,
                 InstanceType=APP_TIER_INSTANCE_TYPE,
@@ -68,26 +60,27 @@ def scale_up(current_instance_count):
                     'Tags': [{'Key': 'Name', 'Value': instance_name}]
                 }]
             )
-        print(f"Scaling up: {instances_to_add} instances added, named app-tier-instance-{next_instance_number} to app-tier-instance-{next_instance_number + instances_to_add - 1}.")
+        print(f"Scaling up: {instances_to_add} instance(s) added.")
 
 # Function to scale down the App Tier (terminate EC2 instances)
 def scale_down(current_instance_count):
-    if current_instance_count > MIN_INSTANCES:
-        instances_to_remove = min(current_instance_count - MIN_INSTANCES, 1)
+    if current_instance_count > 0:
+        instances_to_remove = current_instance_count  # Scale down all instances when no messages
         instances = ec2.instances.filter(
             Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
                      {'Name': 'instance-state-name', 'Values': ['running']}]
         )
         for instance in instances.limit(instances_to_remove):
-            print(f"Terminating instance {instance.id} ({instance.tags[0]['Value']})")
             instance.terminate()
-        print(f"Scaling down: {instances_to_remove} instances removed.")
+            print(f"Terminating instance {instance.id}")
+        print(f"Scaling down: {instances_to_remove} instance(s) removed.")
     else:
         print("No instances to terminate.")
 
 # Autoscaling controller to monitor queue and adjust App Tier instances
 def autoscaling_controller():
     while True:
+        # Get the current message count in the SQS queue
         queue_size = get_queue_size()
         current_instances = list(ec2.instances.filter(
             Filters=[{'Name': 'tag:Name', 'Values': ['app-tier-instance-*']},
@@ -97,9 +90,12 @@ def autoscaling_controller():
 
         print(f"Queue size: {queue_size}, Current App Tier instances: {current_instance_count}")
 
-        if queue_size > SCALE_UP_THRESHOLD:
+        # SCALE UP if there are messages in the queue and we have not reached the maximum number of instances
+        if queue_size >= SCALE_UP_THRESHOLD:
             scale_up(current_instance_count)
-        elif queue_size < SCALE_DOWN_THRESHOLD and current_instance_count > 0:
+        
+        # SCALE DOWN if there are no messages in the queue and there are running instances
+        elif queue_size == SCALE_DOWN_THRESHOLD:
             scale_down(current_instance_count)
 
         # Autoscaling check every 10 seconds
@@ -113,7 +109,7 @@ def handle_image():
     file = request.files['inputFile']
     filename = file.filename
     image_data = file.read()
-    
+
     # Store the image in the S3 input bucket
     s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
 
@@ -144,17 +140,15 @@ def handle_image():
                 body = json.loads(msg['Body'])
                 if body['filename'] == filename:
                     # Process the result from the App Tier
-                    print(f"Received result for {filename}: {body['result']}")
-                    
-                    # Store the result in the S3 output bucket
-                    s3.put_object(Bucket=OUTPUT_BUCKET, Key=filename, Body=body['result'])
+                    result = body['result']
+                    print(f"Received result for {filename}: {result}")
                     
                     # Delete the message from the queue
                     sqs.delete_message(
                         QueueUrl=RESPONSE_QUEUE_URL,
                         ReceiptHandle=msg['ReceiptHandle']
                     )
-                    return f"{filename}:{body['result']}", 200
+                    return f"{filename}: {result}", 200
         else:
             time.sleep(2)
 
