@@ -200,7 +200,7 @@ def handle_image():
     while True:
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
-            MaxNumberOfMessages=1,
+            MaxNumberOfMessages=10,
             WaitTimeSeconds=20
         )
         if 'Messages' in response:
