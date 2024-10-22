@@ -51,7 +51,7 @@ source venv/bin/activate
 
 # Run the App_Tier.py script using nohup and send it to the background
 echo "Starting the App_Tier.py script..." >> $LOG_FILE
-nohup python3 /CCProject2AppTier/App_Tier.py >> $LOG_FILE 2>&1 &
+nohup python3 //App_Tier.py >> $LOG_FILE 2>&1 &
 
 echo "User data script execution completed." >> $LOG_FILE
 
