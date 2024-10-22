@@ -108,13 +108,13 @@ def autoscaling_controller():
     while True:
         request_queue_size = get_request_queue_size()
         total_running_app_instances = count_running_instances() - 1  # Subtract 1 for Web Tier instance
-        print("Request queue size " + request_queue_size + " total running instances "+total_running_app_instances)
-        print("Max instances "+MAX_INSTANCES)
+        print("Request queue size " + str(request_queue_size) + " total running instances " + str(total_running_app_instances))
+        print("Max instances "+str(MAX_INSTANCES))
         # Scale up if there are more messages than running instances
         if request_queue_size > total_running_app_instances and total_running_app_instances < MAX_INSTANCES:
             additional_app_instances_needed = min(MAX_INSTANCES - total_running_app_instances, request_queue_size - total_running_app_instances)
-            print("Taking min of " + MAX_INSTANCES - total_running_app_instances + " and "+ request_queue_size - total_running_app_instances)
-            print("Additional instances needed " + additional_app_instances_needed)
+            print("Taking min of " + str(MAX_INSTANCES - total_running_app_instances) + " and "+ str(request_queue_size - total_running_app_instances))
+            print("Additional instances needed " + str(additional_app_instances_needed))
             for i in range(additional_app_instances_needed):
                 instance_id = launch_app_instance()
                 if instance_id and instance_id not in running_app_instances:
