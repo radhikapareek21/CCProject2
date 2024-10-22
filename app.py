@@ -90,9 +90,9 @@ def launch_app_instance():
                 'ResourceType': 'instance',
                 'Tags': [{'Key': 'Name', 'Value': 'app-tier-instance'}]
             }],
-            IamInstanceProfile={
-                'Name': 'EC2-S3Access-Role'  # The name of your IAM role's instance profile
-            }
+            # IamInstanceProfile={
+            #     'Name': 'EC2-S3Access-Role'  # The name of your IAM role's instance profile
+            # }
         )
         instance_id = instance['Instances'][0]['InstanceId']
         print(f"Launched EC2 app instance {instance_id}")
