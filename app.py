@@ -37,14 +37,24 @@ s3 = boto3.client('s3', region_name=REGION)
 running_app_instances = []  # Track running App Tier instances
 
 user_data_script = """#!/bin/bash
+LOG_FILE="/home/ubuntu/startup.log"
+
+echo "Starting user data script execution..." > $LOG_FILE
+
 # Navigate to the CCPproject2AppTier directory
+echo "Navigating to the project directory..." >> $LOG_FILE
 cd /home/ubuntu/CCPproject2AppTier
 
 # Activate the virtual environment
+echo "Activating the virtual environment..." >> $LOG_FILE
 source venv/bin/activate
 
 # Run the App_Tier.py script using nohup and send it to the background
-nohup python3 App_Tier.py >/dev/null 2>&1 &
+echo "Starting the App_Tier.py script..." >> $LOG_FILE
+nohup python3 App_Tier.py >> $LOG_FILE 2>&1 &
+
+echo "User data script execution completed." >> $LOG_FILE
+
 
 """
 
@@ -60,6 +70,7 @@ def launch_app_instance():
             InstanceType=INSTANCE_TYPE,
             MinCount=1,
             MaxCount=1,
+            KeyName = 'RadhikaKeyPair',
             UserData=user_data_encoded,
             TagSpecifications=[{
                 'ResourceType': 'instance',
