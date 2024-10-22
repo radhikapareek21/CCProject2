@@ -39,19 +39,33 @@ running_app_instances = []  # Track running App Tier instances
 user_data_script = """#!/bin/bash
 LOG_FILE="/home/ubuntu/startup.log"
 
+# Start logging
 echo "Starting user data script execution..." > $LOG_FILE
 
-# Navigate to the CCPproject2AppTier directory
+# Navigate to the CCProject2AppTier directory
 echo "Navigating to the project directory..." >> $LOG_FILE
-cd CCProject2AppTier
+cd /home/ubuntu/CCProject2AppTier || {
+    echo "Failed to navigate to CCProject2AppTier directory." >> $LOG_FILE
+    exit 1
+}
+
+# Log current directory
+echo "Current directory: $(pwd)" >> $LOG_FILE
+
+# List directory contents
+echo "Listing directory contents:" >> $LOG_FILE
+ls -lah >> $LOG_FILE
 
 # Activate the virtual environment
 echo "Activating the virtual environment..." >> $LOG_FILE
-source venv/bin/activate
+source venv/bin/activate || {
+    echo "Failed to activate the virtual environment." >> $LOG_FILE
+    exit 1
+}
 
 # Run the App_Tier.py script using nohup and send it to the background
 echo "Starting the App_Tier.py script..." >> $LOG_FILE
-nohup python3 //App_Tier.py >> $LOG_FILE 2>&1 &
+nohup python3 App_Tier.py >> $LOG_FILE 2>&1 &
 
 echo "User data script execution completed." >> $LOG_FILE
 
