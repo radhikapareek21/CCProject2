@@ -37,9 +37,15 @@ s3 = boto3.client('s3', region_name=REGION)
 running_app_instances = []  # Track running App Tier instances
 
 user_data_script = """#!/bin/bash
+# Navigate to the CCPproject2AppTier directory
 cd /home/ubuntu/CCPproject2AppTier
+
+# Activate the virtual environment
 source venv/bin/activate
-python App_Tier.py > /home/ubuntu/app_tier.log 2>&1 &
+
+# Run the App_Tier.py script directly
+nohup python3 App_Tier.py &
+
 """
 
 
