@@ -37,9 +37,11 @@ s3 = boto3.client('s3', region_name=REGION)
 running_app_instances = []  # Track running App Tier instances
 
 user_data_script = """#!/bin/bash
-source /home/ubuntu/venv/bin/activate
-python /home/ubuntu/CCPproject2AppTier/App_Tier.py > /home/ubuntu/app_tier.log 2>&1 &
+cd /home/ubuntu/CCPproject2AppTier
+source venv/bin/activate
+python App_Tier.py > /home/ubuntu/app_tier.log 2>&1 &
 """
+
 
 user_data_encoded = base64.b64encode(user_data_script.encode('utf-8')).decode('utf-8')
 
