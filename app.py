@@ -43,7 +43,7 @@ echo "Starting user data script execution..." > $LOG_FILE
 
 # Navigate to the CCPproject2AppTier directory
 echo "Navigating to the project directory..." >> $LOG_FILE
-cd CCPproject2AppTier
+cd CCProject2AppTier
 
 # Activate the virtual environment
 echo "Activating the virtual environment..." >> $LOG_FILE
