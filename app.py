@@ -43,8 +43,8 @@ cd /home/ubuntu/CCPproject2AppTier
 # Activate the virtual environment
 source venv/bin/activate
 
-# Run the App_Tier.py script directly
-nohup python3 App_Tier.py &
+# Run the App_Tier.py script using nohup and send it to the background
+nohup python3 App_Tier.py >/dev/null 2>&1 &
 
 """
 
