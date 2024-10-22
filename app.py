@@ -4,6 +4,8 @@ import os
 import json
 import time
 import threading
+import base64
+
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -34,6 +36,14 @@ s3 = boto3.client('s3', region_name=REGION)
 
 running_app_instances = []  # Track running App Tier instances
 
+user_data_script = """#!/bin/bash
+source /home/ubuntu/venv/bin/activate
+python /home/ubuntu/CCPproject2AppTier/App_Tier.py > /home/ubuntu/app_tier.log 2>&1 &
+"""
+
+user_data_encoded = base64.b64encode(user_data_script.encode('utf-8')).decode('utf-8')
+
+
 # Function to launch new EC2 instances (App Tier)
 def launch_app_instance():
     try:
@@ -42,6 +52,7 @@ def launch_app_instance():
             InstanceType=INSTANCE_TYPE,
             MinCount=1,
             MaxCount=1,
+            UserData=user_data_encoded,
             TagSpecifications=[{
                 'ResourceType': 'instance',
                 'Tags': [{'Key': 'Name', 'Value': 'app-tier-instance'}]
