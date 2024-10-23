@@ -166,7 +166,7 @@ def autoscaling_controller():
             running_app_instances.clear()
             counter = 0
 
-        time.sleep(3)
+        time.sleep(1)
 
 # Flask route to handle image uploads
 @app.route("/", methods=["POST"])
@@ -200,7 +200,7 @@ def handle_image():
     while True:
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
-            MaxNumberOfMessages=1,
+            MaxNumberOfMessages=10,
             WaitTimeSeconds=5
         )
         if 'Messages' in response:
@@ -220,7 +220,7 @@ def handle_image():
                     # Once the result is received, return the result to the client
                     return f"{filename}: {result}", 200
         else:
-            time.sleep(2)
+            time.sleep(1)
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
