@@ -1,15 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import boto3
 import os
 import json
-import aiobotocore
-from aiobotocore.session import AioSession
 import time
 import threading
 import base64
-import json
-import asyncio
-
 
 
 # Initialize the Flask application
@@ -28,7 +23,7 @@ INPUT_BUCKET = f'{ASU_ID}-in-bucket'
 OUTPUT_BUCKET = f'{ASU_ID}-out-bucket'
 
 # EC2 details
-AMI_ID = 'ami-0c6a4b2690fe19821'  # Replace with your AMI ID
+AMI_ID = 'ami-05b9307aa795111f9'  # Replace with your AMI ID
 INSTANCE_TYPE = 't2.micro'
 MAX_INSTANCES = 15  # Maximum number of App Tier instances
 # Add your user data script here to start app_tier.py on the instance
@@ -38,9 +33,6 @@ MAX_INSTANCES = 15  # Maximum number of App Tier instances
 sqs = boto3.client('sqs', region_name=REGION)
 ec2 = boto3.client('ec2', region_name=REGION)
 s3 = boto3.client('s3', region_name=REGION)
-
-session = AioSession()
-
 
 running_app_instances = []  # Track running App Tier instances
 
@@ -176,52 +168,59 @@ def autoscaling_controller():
 
         time.sleep(3)
 
+# Flask route to handle image uploads
 @app.route("/", methods=["POST"])
-async def handle_image():
+def handle_image():
     if 'inputFile' not in request.files:
         return "No file part", 400
-
+    
     file = request.files['inputFile']
     filename = file.filename
     image_data = file.read()
-    response_data = {}
 
-    # Store the image in the S3 bucket using async
-   
+    # Store the image in the S3 input bucket
+    s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
 
-    # Send the image filename and data to the App Tier via SQS and initialize response data
+    # Send the image filename and data to the App Tier via SQS
     message = {
         "filename": filename,
-        "image_data": base64.b64encode(image_data).decode('utf-8')
+        "image_data": image_data.decode('ISO-8859-1')  # Encoding for sending binary data
     }
+    try:
+        response = sqs.send_message(
+            QueueUrl=REQUEST_QUEUE_URL,
+            MessageBody=json.dumps(message)
+        )
+        print(f"Message sent to request queue. MessageId: {response['MessageId']}")
+    except Exception as e:
+        print(f"Failed to send message to request queue: {str(e)}")
+        return "Error submitting image for processing", 500
 
-    async with session.create_client('sqs', region_name=REGION) as sqs:
-        await sqs.send_message(QueueUrl=REQUEST_QUEUE_URL, MessageBody=json.dumps(message))
-        response_data[filename] = None
+    # Poll the response queue for the result
+    while True:
+        response = sqs.receive_message(
+            QueueUrl=RESPONSE_QUEUE_URL,
+            MaxNumberOfMessages=1,
+            WaitTimeSeconds=5
+        )
+        if 'Messages' in response:
+            for msg in response['Messages']:
+                body = json.loads(msg['Body'])
+                if body['filename'] == filename:
+                    # Process the result from the App Tier
+                    result = body['result']
+                    print(f"Received result for {filename}: {result}")
+                    
+                    # Delete the message from the queue
+                    sqs.delete_message(
+                        QueueUrl=RESPONSE_QUEUE_URL,
+                        ReceiptHandle=msg['ReceiptHandle']
+                    )
 
-    async with session.create_client('s3', region_name=REGION) as s3:
-        await s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
-
-    # Poll the response queue for results
-    return await poll_response_queue(filename, response_data)
-
-async def poll_response_queue(filename, response_data):
-    async with session.create_client('sqs', region_name=REGION) as sqs:
-        while None in response_data.values():
-            messages = await sqs.receive_message(
-                QueueUrl=RESPONSE_QUEUE_URL,
-                MaxNumberOfMessages=10,
-                WaitTimeSeconds=5
-            )
-            if 'Messages' in messages:
-                for message in messages['Messages']:
-                    body = json.loads(message['Body'])
-                    response_data[body['filename']] = body['result']
-                    await sqs.delete_message(QueueUrl=RESPONSE_QUEUE_URL, ReceiptHandle=message['ReceiptHandle'])
-
-            await asyncio.sleep(2)  # Small delay to prevent tight looping
-
-    return jsonify(response_data), 200
+                    # Once the result is received, return the result to the client
+                    return f"{filename}: {result}", 200
+        else:
+            time.sleep(2)
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
