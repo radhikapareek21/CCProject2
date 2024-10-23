@@ -24,7 +24,7 @@ INPUT_BUCKET = f'{ASU_ID}-in-bucket'
 OUTPUT_BUCKET = f'{ASU_ID}-out-bucket'
 
 # EC2 details
-AMI_ID = 'ami-05b9307aa795111f9'  # Replace with your AMI ID
+AMI_ID = 'ami-0c6a4b2690fe19821'  # Replace with your AMI ID
 INSTANCE_TYPE = 't2.micro'
 MAX_INSTANCES = 15  # Maximum number of App Tier instances
 # Add your user data script here to start app_tier.py on the instance
