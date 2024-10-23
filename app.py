@@ -195,10 +195,8 @@ def handle_image():
     except Exception as e:
         print(f"Failed to send message to request queue: {str(e)}")
         return "Error submitting image for processing", 500
-    
-    poll_response_queue(filename)
+
     # Poll the response queue for the result
-    '''
     while True:
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
@@ -223,48 +221,6 @@ def handle_image():
                     return f"{filename}: {result}", 200
         else:
             time.sleep(1)
-            '''
-
-def process_response_message(filename, msg):
-    body = json.loads(msg['Body'])
-    if body['filename'] == filename:
-        # Process the result from the App Tier
-        result = body['result']
-        print(f"Received result for {filename}: {result}")
-        
-        # Delete the message from the queue
-        sqs.delete_message(
-            QueueUrl=RESPONSE_QUEUE_URL,
-            ReceiptHandle=msg['ReceiptHandle']
-        )
-
-        # Once the result is received, return the result to the client
-        return f"{filename}: {result}", 200
-    else:
-        # Handle mismatch in filename or skip
-        print(f"Filename mismatch: Expected {filename}, got {body['filename']}")
-
-def poll_response_queue(filename):
-    while True:
-        response = sqs.receive_message(
-            QueueUrl=RESPONSE_QUEUE_URL,
-            MaxNumberOfMessages=10,  # Fetch up to 10 messages at a time
-            WaitTimeSeconds=5  # Poll for 5 seconds
-        )
-        if 'Messages' in response:
-            # Create a thread for each message and process concurrently
-            threads = []
-            for msg in response['Messages']:
-                thread = threading.Thread(target=process_response_message, args=(filename, msg))
-                thread.start()
-                threads.append(thread)
-            
-            # Wait for all threads to finish processing
-            for thread in threads:
-                thread.join()
-        else:
-            time.sleep(1)  # Wait before polling again if no messages
-
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
