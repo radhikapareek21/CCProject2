@@ -1,10 +1,11 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 import boto3
 import os
 import json
 import time
 import threading
 import base64
+import json
 
 
 # Initialize the Flask application
@@ -175,12 +176,16 @@ def handle_image():
         return "No file part", 400
     
     file = request.files['inputFile']
+    files = request.files.getlist('inputFiles')
+    expected_results = len(files)
     filename = file.filename
     image_data = file.read()
+    response_data = {}
+
 
     # Store the image in the S3 input bucket
     s3.put_object(Bucket=INPUT_BUCKET, Key=filename, Body=image_data)
-
+    response_data[filename] = None  # Initialize the response data
     # Send the image filename and data to the App Tier via SQS
     message = {
         "filename": filename,
@@ -197,7 +202,7 @@ def handle_image():
         return "Error submitting image for processing", 500
 
     # Poll the response queue for the result
-    while True:
+    while None in response_data.values():
         response = sqs.receive_message(
             QueueUrl=RESPONSE_QUEUE_URL,
             MaxNumberOfMessages=1,
@@ -206,21 +211,20 @@ def handle_image():
         if 'Messages' in response:
             for msg in response['Messages']:
                 body = json.loads(msg['Body'])
-                #if body['filename'] == filename:
-                    # Process the result from the App Tier
-                result = body['result']
-                print(f"Received result for {filename}: {result}")
-                    
-                    # Delete the message from the queue
-                sqs.delete_message(
-                    QueueUrl=RESPONSE_QUEUE_URL,
-                    ReceiptHandle=msg['ReceiptHandle']
-                )
+                if body['filename'] in response_data:
+                    response_data[body['filename']] = body['result']
+                    sqs.delete_message(
+                        QueueUrl=RESPONSE_QUEUE_URL,
+                        ReceiptHandle=msg['ReceiptHandle']
+                    )
 
-                    # Once the result is received, return the result to the client
-                return f"{filename}: {result}", 200
-        else:
-            time.sleep(2)
+        time.sleep(2)  # Sleep to prevent tight looping
+
+    # Check if all results have been received
+    if all(result is not None for result in response_data.values()):
+        return jsonify(response_data), 200
+    else:
+        time.sleep(2)
 
 if __name__ == "__main__":
     # Run the autoscaling controller in a separate thread
