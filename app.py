@@ -206,19 +206,19 @@ def handle_image():
         if 'Messages' in response:
             for msg in response['Messages']:
                 body = json.loads(msg['Body'])
-                if body['filename'] == filename:
+                #if body['filename'] == filename:
                     # Process the result from the App Tier
-                    result = body['result']
-                    print(f"Received result for {filename}: {result}")
+                result = body['result']
+                print(f"Received result for {filename}: {result}")
                     
                     # Delete the message from the queue
-                    sqs.delete_message(
-                        QueueUrl=RESPONSE_QUEUE_URL,
-                        ReceiptHandle=msg['ReceiptHandle']
-                    )
+                sqs.delete_message(
+                    QueueUrl=RESPONSE_QUEUE_URL,
+                    ReceiptHandle=msg['ReceiptHandle']
+                )
 
                     # Once the result is received, return the result to the client
-                    return f"{filename}: {result}", 200
+                return f"{filename}: {result}", 200
         else:
             time.sleep(2)
 
