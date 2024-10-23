@@ -211,12 +211,12 @@ def handle_image():
         if 'Messages' in response:
             for msg in response['Messages']:
                 body = json.loads(msg['Body'])
-                if body['filename'] in response_data:
-                    response_data[body['filename']] = body['result']
-                    sqs.delete_message(
-                        QueueUrl=RESPONSE_QUEUE_URL,
-                        ReceiptHandle=msg['ReceiptHandle']
-                    )
+                #if body['filename'] in response_data:
+                response_data[body['filename']] = body['result']
+                sqs.delete_message(
+                    QueueUrl=RESPONSE_QUEUE_URL,
+                    ReceiptHandle=msg['ReceiptHandle']
+                )
 
         time.sleep(2)  # Sleep to prevent tight looping
 
