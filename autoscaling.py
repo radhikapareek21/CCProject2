@@ -25,8 +25,6 @@ sqs = boto3.client('sqs', region_name=REGION)
 ec2 = boto3.client('ec2', region_name=REGION)
 
 running_app_instances = []  # Track running App Tier instances
-instance_counter = 0  # This will keep track of the instance numbers
-
 
 user_data_script = """#!/bin/bash
 LOG_FILE="/home/ubuntu/startup.log"
@@ -70,10 +68,6 @@ echo "User data script execution completed." >> $LOG_FILE
 
 # Function to launch new EC2 instances (App Tier)
 def launch_app_instance():
-    global instance_counter  # Declare the counter as global to increment it for each instance
-    instance_counter += 1  # Increment the counter
-    instance_name = f"app-tier-instance-{instance_counter}"  # Create a unique instance name with the counter
-    
     try:
         instance = ec2.run_instances(
             ImageId=AMI_ID,
@@ -84,7 +78,7 @@ def launch_app_instance():
             UserData=user_data_script,
             TagSpecifications=[{
                 'ResourceType': 'instance',
-                'Tags': [{'Key': 'Name', 'Value': instance_name}]
+                'Tags': [{'Key': 'Name', 'Value': 'app-tier-instance'}]
             }],
             IamInstanceProfile={
                  'Name': 'EC2-S3Access-Role'  # The name of your IAM role's instance profile
