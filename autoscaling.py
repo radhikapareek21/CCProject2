@@ -150,7 +150,7 @@ if __name__ == '__main__':
             counter = 0
 
         # Scale down after 5 consecutive empty queue checks
-        if counter >= 10 and total_running_app_instances > 0:
+        if counter >= 20 and total_running_app_instances > 0:
             terminate_app_instances(running_app_instances)
             running_app_instances.clear()
             counter = 0
